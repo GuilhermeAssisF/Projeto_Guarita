@@ -1,0 +1,6 @@
+opencv-python
+opencv-contrib-python
+easyocr
+pandas
+numpy
+imutils

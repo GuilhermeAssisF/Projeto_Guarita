@@ -1,0 +1,26 @@
+Ignorar arquivos temporários do Python
+
+pycache/
+*.py[cod]
+*$py.class
+
+Ignorar o ambiente virtual (se você criou um)
+
+venv/
+env/
+.env
+
+Ignorar banco de dados local (o código gera um novo automaticamente)
+
+*.db
+*.sqlite3
+
+Ignorar arquivos de log ou relatórios gerados
+
+*.log
+*.csv
+
+Ignorar configurações da IDE (VS Code, Pycharm)
+
+.vscode/
+.idea/
