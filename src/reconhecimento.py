@@ -6,13 +6,30 @@ import imutils
 
 class DetectorPlaca:
     def __init__(self, gpu=False, min_area=300):
-        print("Carregando modelo OCR...")
+        print("Carregando modelo OCR (uma única vez)...")
+        # Carregamos a IA apenas uma vez na inicialização do programa
         self.reader = easyocr.Reader(['pt'], gpu=gpu, quantize=False)
         self.min_area = min_area
-        self.cap = cv2.VideoCapture(0)
+        self.cap = None
+
+    def conectar_camera(self):
+        """Inicia a conexão com a webcam se não estiver ativa"""
+        if self.cap is None or not self.cap.isOpened():
+            self.cap = cv2.VideoCapture(0)
+            return True
+        return True
+
+    def desconectar_camera(self):
+        """Libera a webcam para economizar recursos"""
+        if self.cap is not None and self.cap.isOpened():
+            self.cap.release()
+        self.cap = None
 
     def ler_frame(self):
-        """Captura um frame da webcam"""
+        """Captura um frame se a câmera estiver conectada"""
+        if self.cap is None or not self.cap.isOpened():
+            return None
+
         ret, frame = self.cap.read()
         if not ret:
             return None
@@ -21,13 +38,14 @@ class DetectorPlaca:
     def processar(self, frame):
         """
         Recebe um frame, tenta achar a placa e ler.
-        Retorna: (frame_desenhado, texto_placa_ou_None, imagem_recortada_ou_None)
         """
+        if frame is None:
+            return None, None, None
+
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
         edged = cv2.Canny(blur, 30, 200)
 
-        # Encontrar contornos
         keypoints = cv2.findContours(edged.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contours = imutils.grab_contours(keypoints)
         contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
@@ -44,10 +62,8 @@ class DetectorPlaca:
         crop = None
 
         if location is not None:
-            # Desenha o quadrado verde
             cv2.drawContours(frame, [location], -1, (0, 255, 0), 2)
 
-            # Tenta ler (Lógica de OCR)
             try:
                 mask = np.zeros(gray.shape, np.uint8)
                 new_image = cv2.drawContours(mask, [location], 0, 255, -1)
@@ -59,7 +75,6 @@ class DetectorPlaca:
                     (bottomx, bottomy) = (np.max(x), np.max(y))
                     crop = new_image[topx:bottomx + 1, topy:bottomy + 1]
 
-                    # Tratamento para OCR
                     crop_gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
                     crop_gray = cv2.resize(crop_gray, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
                     _, crop_binary = cv2.threshold(crop_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -68,16 +83,11 @@ class DetectorPlaca:
 
                     for (bbox, text, prob) in result:
                         text_clean = text.replace(" ", "").upper().replace("-", "").replace(".", "")
-                        # Filtro de confiança e tamanho
                         if len(text_clean) >= 7 and prob > 0.4:
                             texto_lido = text_clean
-                            # Escreve na imagem
                             cv2.putText(frame, text_clean, (location[0][0][0], location[0][0][1] - 10),
                                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             except Exception as e:
-                pass  # Ignora erros de recorte momentâneos
+                pass
 
         return frame, texto_lido, crop
-
-    def liberar(self):
-        self.cap.release()

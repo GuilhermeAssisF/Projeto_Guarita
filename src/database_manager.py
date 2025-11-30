@@ -3,7 +3,6 @@ from datetime import datetime
 import pandas as pd
 import os
 
-# Caminho absoluto para evitar erro de pasta
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(BASE_DIR, "../data/estacionamento.db")
 
@@ -13,9 +12,7 @@ def conectar():
 
 
 def inicializar_banco():
-    # Garante que a pasta data existe
     os.makedirs(os.path.dirname(DB_NAME), exist_ok=True)
-
     conn = conectar()
     cursor = conn.cursor()
 
@@ -65,19 +62,18 @@ def inicializar_banco():
                    )
                        )
                    ''')
-
     conn.commit()
     conn.close()
 
 
-def cadastrar_veiculo(placa, proprietario, tipo, categoria, status="AUTORIZADO"):
+def cadastrar_veiculo(placa, proprietario, tipo, categoria, status="AUTORIZADO", obs=""):
     conn = conectar()
     cursor = conn.cursor()
     try:
         cursor.execute('''
-            INSERT OR REPLACE INTO veiculos (placa, proprietario, tipo, categoria, status)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (placa.upper(), proprietario, tipo, categoria, status))
+            INSERT OR REPLACE INTO veiculos (placa, proprietario, tipo, categoria, status, observacao)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (placa.upper(), proprietario, tipo, categoria, status, obs))
         conn.commit()
         return True
     except Exception as e:
@@ -96,6 +92,34 @@ def buscar_veiculo(placa):
     return veiculo
 
 
+def listar_todos_veiculos():
+    """Retorna uma lista com todos os veículos para a aba manual"""
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT placa, proprietario, categoria, status FROM veiculos ORDER BY placa")
+    veiculos = cursor.fetchall()
+    conn.close()
+    return veiculos
+
+
+def excluir_veiculo(placa):
+    """Remove um veículo e seus históricos do banco de dados"""
+    conn = conectar()
+    cursor = conn.cursor()
+    try:
+        # Opcional: Remover histórico de acessos desse veículo antes
+        cursor.execute("DELETE FROM acessos WHERE placa = ?", (placa.upper(),))
+        # Remove o cadastro
+        cursor.execute("DELETE FROM veiculos WHERE placa = ?", (placa.upper(),))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Erro ao excluir: {e}")
+        return False
+    finally:
+        conn.close()
+
+
 def registrar_entrada(placa):
     conn = conectar()
     cursor = conn.cursor()
@@ -103,7 +127,6 @@ def registrar_entrada(placa):
     data_atual = agora.strftime("%Y-%m-%d")
     hora_atual = agora.strftime("%H:%M:%S")
 
-    # Verifica se já está dentro
     cursor.execute('''
                    SELECT id
                    FROM acessos
@@ -165,7 +188,6 @@ def registrar_saida(placa):
 
 
 def exportar_relatorio():
-    """Gera um Excel com o histórico de acessos (Requisito 5)"""
     conn = conectar()
     try:
         query = """
@@ -175,9 +197,7 @@ def exportar_relatorio():
                 ORDER BY a.data_entrada DESC, a.hora_entrada DESC \
                 """
         df = pd.read_sql_query(query, conn)
-
         filename = f"../relatorio_acessos_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
-        # Salva em CSV para não depender de libs de Excel pesadas
         df.to_csv(filename, index=False, sep=';', encoding='utf-8-sig')
         return True, filename
     except Exception as e:
